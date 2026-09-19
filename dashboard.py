@@ -112,9 +112,7 @@ if uploaded_file is not None:
     try:
         with st.spinner("Analyzing biometric data..."):
             # Read the uploaded file
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            elif uploaded_file.name.endswith('.pdf'):
+            if uploaded_file.name.endswith('.pdf'):
                 import pdfplumber
                 all_data = []
                 header = None
@@ -147,7 +145,28 @@ if uploaded_file is not None:
                     st.error("❌ **Error:** Could not extract tabular data from the PDF.")
                     df = pd.DataFrame()
             else:
-                df = pd.read_excel(uploaded_file)
+                # Handle CSV and Excel files that have extra title rows at the top
+                if uploaded_file.name.endswith('.csv'):
+                    raw_df = pd.read_csv(uploaded_file, header=None)
+                else:
+                    raw_df = pd.read_excel(uploaded_file, header=None)
+                
+                # Find the actual header row (since the report has titles at the top)
+                header_row_idx = None
+                for idx, row in raw_df.iterrows():
+                    row_vals = row.astype(str).str.strip().values
+                    if 'INTime' in row_vals or 'Empcode' in row_vals or 'Name' in row_vals:
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is not None:
+                    # Make that row the header
+                    raw_df.columns = raw_df.iloc[header_row_idx].astype(str).str.strip()
+                    # Keep only data rows below it
+                    df = raw_df.iloc[header_row_idx + 1:].reset_index(drop=True)
+                else:
+                    # Fallback if not found
+                    df = raw_df
             
             if not df.empty:
                 # Clean up column names (strip whitespace)
